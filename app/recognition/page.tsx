@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { useState, useRef } from "react";
 
+interface RecognitionResult {
+  description: string;
+  raw?: any;
+}
+
 export default function RecognitionPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<{
-    labels: string[];
-    description: string;
-    colors: string[];
-  } | null>(null);
+  const [result, setResult] = useState<RecognitionResult | null>(null);
+  const [error, setError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -21,6 +23,7 @@ export default function RecognitionPage() {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       setResult(null);
+      setError("");
     }
   };
 
@@ -28,15 +31,33 @@ export default function RecognitionPage() {
     if (!selectedFile) return;
 
     setIsAnalyzing(true);
-    // TODO: 集成实际的图片识别 API（如 Google Vision API、百度AI等）
-    setTimeout(() => {
-      setResult({
-        labels: ["风景", "自然", "天空", "云朵", "山脉"],
-        description: "这是一张美丽的风景照片，展示了壮观的山脉和蓝天白云",
-        colors: ["#4A90E2", "#87CEEB", "#228B22", "#FFFFFF"],
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("image_file", selectedFile);
+
+      const response = await fetch("/api/recognition", {
+        method: "POST",
+        body: formData,
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "识别失败");
+      }
+
+      const data = await response.json();
+      setResult({
+        description: data.description,
+        raw: data.raw,
+      });
+    } catch (err) {
+      console.error("Error analyzing image:", err);
+      setError(err instanceof Error ? err.message : "识别失败，请重试");
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -58,6 +79,7 @@ export default function RecognitionPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* Upload Section */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-6">
           <input
             ref={fileInputRef}
@@ -82,29 +104,61 @@ export default function RecognitionPage() {
             </div>
           ) : (
             <div className="space-y-6">
+              {/* File Info */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <strong>文件名：</strong> {selectedFile.name}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <strong>文件大小：</strong> {(selectedFile.size / 1024).toFixed(2)} KB
+                </p>
+              </div>
+
+              {/* Action Buttons */}
               <div className="flex gap-4">
                 <button
                   onClick={handleAnalyze}
                   disabled={isAnalyzing}
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  {isAnalyzing ? "分析中..." : "开始识别"}
+                  {isAnalyzing ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      分析中...
+                    </>
+                  ) : (
+                    "🔍 开始识别"
+                  )}
                 </button>
                 <button
                   onClick={() => {
                     setSelectedFile(null);
                     setPreviewUrl("");
                     setResult(null);
+                    setError("");
                   }}
                   className="px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   重新选择
                 </button>
               </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <p className="text-sm text-red-800 dark:text-red-200">
+                    ❌ {error}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
 
+        {/* Preview and Results */}
         {selectedFile && (
           <div className="grid md:grid-cols-2 gap-6">
             {/* Image Preview */}
@@ -112,10 +166,8 @@ export default function RecognitionPage() {
               <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
                 图片预览
               </h3>
-              <img src={previewUrl} alt="Preview" className="w-full rounded-lg shadow-md" />
-              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                <p>文件名: {selectedFile.name}</p>
-                <p>文件大小: {(selectedFile.size / 1024).toFixed(2)} KB</p>
+              <div className="relative bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
+                <img src={previewUrl} alt="Preview" className="w-full h-auto" />
               </div>
             </div>
 
@@ -125,56 +177,18 @@ export default function RecognitionPage() {
                 识别结果
               </h3>
               {result ? (
-                <div className="space-y-6">
-                  {/* Labels */}
-                  <div>
+                <div className="space-y-4">
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      识别标签
+                      AI 分析
                     </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {result.labels.map((label, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-sm"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      图片描述
-                    </h4>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
                       {result.description}
-                    </p>
-                  </div>
-
-                  {/* Dominant Colors */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      主要颜色
-                    </h4>
-                    <div className="flex gap-2">
-                      {result.colors.map((color, index) => (
-                        <div key={index} className="text-center">
-                          <div
-                            className="w-12 h-12 rounded-lg shadow-md border border-gray-200 dark:border-gray-600"
-                            style={{ backgroundColor: color }}
-                          />
-                          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 block">
-                            {color}
-                          </span>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-64 text-gray-400">
+                <div className="flex items-center justify-center h-64 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-400">
                   <div className="text-center">
                     <div className="text-4xl mb-2">⏳</div>
                     <p>等待识别</p>
@@ -185,10 +199,17 @@ export default function RecognitionPage() {
           </div>
         )}
 
-        <div className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            💡 提示：此功能需要集成第三方 AI 识别服务（如 Google Vision API、百度 AI 等）才能正常工作
-          </p>
+        {/* Info Box */}
+        <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
+            💡 使用提示
+          </h4>
+          <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+            <li>• 支持 JPG、PNG、WebP 等格式的图片</li>
+            <li>• AI 将自动识别图片中的元素、主题、场景和风格</li>
+            <li>• 建议上传清晰、内容丰富的图片以获得更准确的分析</li>
+            <li>• 识别结果由火山引擎 AI 提供</li>
+          </ul>
         </div>
       </main>
     </div>
