@@ -13,28 +13,4 @@
     "prettier": "node -e \"console.log('未配置 Prettier')\""
   }
 }
-=======
-{
-  "name": "nextjs",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start"
-  },
-  "dependencies": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.5.4"
-  },
-  "devDependencies": {
-    "typescript": "^5",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4"
-  }
-}
->>>>>>> bd2af9470aaed9a89cb1c1f92da672640c2162dc
+
